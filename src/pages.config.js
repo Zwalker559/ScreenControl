@@ -47,8 +47,18 @@
  *
  * The mainPage value must match a key in the PAGES object exactly.
  */
+import Chat from './pages/Chat';
+import Settings from './pages/Settings';
+import CallMode from './pages/CallMode';
 
-export const pagesConfig = {
-	Pages: {}
+
+export const PAGES = {
+    "Chat": Chat,
+    "Settings": Settings,
+    "CallMode": CallMode,
 }
 
+export const pagesConfig = {
+    mainPage: "Chat",
+    Pages: PAGES,
+};
