@@ -5,7 +5,8 @@ module.exports = {
   theme: {
   	extend: {
   		fontFamily: {
-  			inter: ['var(--font-inter)']
+  			inter: ['Inter', 'sans-serif'],
+  			space: ['Space Grotesk', 'sans-serif'],
   		},
   		borderRadius: {
   			lg: 'var(--radius)',
@@ -46,23 +47,9 @@ module.exports = {
   			border: 'hsl(var(--border))',
   			input: 'hsl(var(--input))',
   			ring: 'hsl(var(--ring))',
-  			chart: {
-  				'1': 'hsl(var(--chart-1))',
-  				'2': 'hsl(var(--chart-2))',
-  				'3': 'hsl(var(--chart-3))',
-  				'4': 'hsl(var(--chart-4))',
-  				'5': 'hsl(var(--chart-5))'
-  			},
-  			sidebar: {
-  				DEFAULT: 'hsl(var(--sidebar-background))',
-  				foreground: 'hsl(var(--sidebar-foreground))',
-  				primary: 'hsl(var(--sidebar-primary))',
-  				'primary-foreground': 'hsl(var(--sidebar-primary-foreground))',
-  				accent: 'hsl(var(--sidebar-accent))',
-  				'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
-  				border: 'hsl(var(--sidebar-border))',
-  				ring: 'hsl(var(--sidebar-ring))'
-  			}
+  			cyan: 'hsl(var(--cyan))',
+  			pink: 'hsl(var(--pink))',
+  			green: 'hsl(var(--green))',
   		},
   		keyframes: {
   			'accordion-down': {
@@ -75,15 +62,16 @@ module.exports = {
   			},
   			'pulse-ring': {
   				'0%': { transform: 'scale(0.8)', opacity: '1' },
-  				'100%': { transform: 'scale(2.2)', opacity: '0' }
+  				'100%': { transform: 'scale(2.4)', opacity: '0' }
   			}
   		},
   		animation: {
   			'accordion-down': 'accordion-down 0.2s ease-out',
   			'accordion-up': 'accordion-up 0.2s ease-out',
-  			'pulse-ring': 'pulse-ring 1.5s ease-out infinite'
+  			'pulse-ring': 'pulse-ring 1.5s ease-out infinite',
   		}
   	}
   },
   plugins: [require("tailwindcss-animate")],
+  safelist: ['text-cyan-400', 'text-pink-400', 'text-green-400', 'bg-cyan-500/10', 'bg-pink-500/10', 'bg-green-500/10', 'border-cyan-500/20', 'border-pink-500/20', 'border-green-500/20']
 }
