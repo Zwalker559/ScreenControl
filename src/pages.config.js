@@ -50,6 +50,7 @@
 import Chat from './pages/Chat';
 import Settings from './pages/Settings';
 import CallMode from './pages/CallMode';
+import __Layout from './Layout.jsx';
 
 
 export const PAGES = {
@@ -61,4 +62,5 @@ export const PAGES = {
 export const pagesConfig = {
     mainPage: "Chat",
     Pages: PAGES,
+    Layout: __Layout,
 };
