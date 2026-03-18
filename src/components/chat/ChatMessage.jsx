@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Volume2, VolumeX, User } from 'lucide-react';
-import { speakText, stopSpeaking } from '@/lib/speechUtils';
+import { speakText, stopSpeaking } from '@/components/speechUtils';
 import ReactMarkdown from 'react-markdown';
 
 export default function ChatMessage({ message }) {

@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Search, Play, Square, Check } from 'lucide-react';
+import { X, Search, Play, Square } from 'lucide-react';
 import { getVoices, speakText, stopSpeaking } from '@/components/speechUtils';
 
 const GENDER_FILTERS = ['All', 'Masculine', 'Feminine', 'Neutral'];
@@ -59,7 +59,7 @@ export default function VoicePickerModal({ onClose, currentVoice, onSelect }) {
     } else {
       stopSpeaking();
       setPlayingVoice(voice.name);
-      speakText('Hello, I am Zeow', voice.name, () => setPlayingVoice(null));
+      speakText('Hello, this is how I sound', voice.name, () => setPlayingVoice(null));
     }
   };
 

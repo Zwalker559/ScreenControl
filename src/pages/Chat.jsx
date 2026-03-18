@@ -11,7 +11,7 @@ import TextInput from '@/components/chat/TextInput';
 import TypingIndicator from '@/components/chat/TypingIndicator';
 import EmptyState from '@/components/chat/EmptyState';
 import SpeakingIndicator from '@/components/chat/SpeakingIndicator';
-import { speakText, stopSpeaking, createWakeWordListener } from '@/components/speechUtils';
+import { speakText, stopSpeaking, createWakeWordListener, createSpeechRecognition } from '@/components/speechUtils';
 import { useSettings } from '@/components/SettingsContext';
 
 export default function Chat() {
@@ -21,8 +21,12 @@ export default function Chat() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [wakeWordEnabled, setWakeWordEnabled] = useState(false);
+  const [isWakeListening, setIsWakeListening] = useState(false);
+  const [wakeWordDetected, setWakeWordDetected] = useState(false);
+  const [interimText, setInterimText] = useState('');
   const messagesEndRef = useRef(null);
   const wakeListenerRef = useRef(null);
+  const commandListenerRef = useRef(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -32,8 +36,118 @@ export default function Chat() {
   useEffect(() => {
     if (wakeWordEnabled) {
       const listener = createWakeWordListener(
-        'hey zeow',
-        (text) => { sendMessage(text); },
+        (eventType, data) => {
+          if (eventType === 'wake_word_detected') {
+            setWakeWordDetected(true);
+            setIsWakeListening(true);
+            setInterimText('');
+
+            const incomingCommand = data?.command?.trim();
+            if (incomingCommand) {
+              // If user already said command with wake phrase in one go, send it directly.
+              setIsWakeListening(false);
+              setWakeWordDetected(false);
+              setInterimText('');
+              sendMessage(incomingCommand);
+              return;
+            }
+
+            // Start a separate speech recognition for the command
+            let sendTimeout = null;
+            let silenceTimeout = null;
+            let hasDetectedSpeech = false;
+
+            const commandRec = createSpeechRecognition(
+              (text, isFinal) => {
+                setInterimText(text);
+                
+                // Clear previous timeouts when new speech is detected
+                if (sendTimeout) {
+                  clearTimeout(sendTimeout);
+                  sendTimeout = null;
+                }
+                if (silenceTimeout && text.trim()) {
+                  clearTimeout(silenceTimeout);
+                  silenceTimeout = null;
+                  hasDetectedSpeech = true;
+                }
+                
+                if (isFinal && text.trim()) {
+                  hasDetectedSpeech = true;
+                  // Start a timeout to send the message after 2 seconds of silence
+                  sendTimeout = setTimeout(() => {
+                    if (commandListenerRef.current) {
+                      setIsWakeListening(false);
+                      setWakeWordDetected(false);
+                      setInterimText('');
+                      sendMessage(text);
+                      commandListenerRef.current = null;
+                    }
+                  }, 2000); // Wait 2 seconds of silence before sending
+                }
+              },
+              (finalText) => {
+                // Recognition ended
+                if (silenceTimeout) clearTimeout(silenceTimeout);
+                if (sendTimeout) {
+                  clearTimeout(sendTimeout);
+                  if (finalText && finalText.trim()) {
+                    setIsWakeListening(false);
+                    setWakeWordDetected(false);
+                    setInterimText('');
+                    sendMessage(finalText);
+                  } else {
+                    setIsWakeListening(false);
+                    setWakeWordDetected(false);
+                    setInterimText('');
+                  }
+                } else {
+                  setIsWakeListening(false);
+                  setWakeWordDetected(false);
+                  setInterimText('');
+                }
+                commandListenerRef.current = null;
+              },
+              (error) => {
+                if (sendTimeout) clearTimeout(sendTimeout);
+                if (silenceTimeout) clearTimeout(silenceTimeout);
+                setIsWakeListening(false);
+                setWakeWordDetected(false);
+                setInterimText('');
+                commandListenerRef.current = null;
+              }
+            );
+
+            if (commandRec) {
+              commandListenerRef.current = commandRec;
+              commandRec.start();
+
+              // Set a 3-second silence timeout - if nothing is said, stop listening
+              silenceTimeout = setTimeout(() => {
+                if (commandListenerRef.current && !hasDetectedSpeech) {
+                  commandListenerRef.current.abort();
+                  setIsWakeListening(false);
+                  setWakeWordDetected(false);
+                  setInterimText('');
+                  commandListenerRef.current = null;
+                }
+              }, 3000);
+
+              // Backup timeout of 10 seconds maximum
+              setTimeout(() => {
+                if (commandListenerRef.current) {
+                  commandListenerRef.current.abort();
+                  if (sendTimeout) clearTimeout(sendTimeout);
+                  if (silenceTimeout) clearTimeout(silenceTimeout);
+                  setIsWakeListening(false);
+                  setWakeWordDetected(false);
+                  setInterimText('');
+                  commandListenerRef.current = null;
+                }
+              }, 10000);
+            }
+          }
+        },
         (err) => console.warn('Wake word error:', err)
       );
       if (listener) {
@@ -46,14 +160,24 @@ export default function Chat() {
         wakeListenerRef.current.abort();
         wakeListenerRef.current = null;
       }
+      if (commandListenerRef.current) {
+        commandListenerRef.current.abort();
+        commandListenerRef.current = null;
+      }
+      setIsWakeListening(false);
+      setWakeWordDetected(false);
+      setInterimText('');
     }
     return () => {
       if (wakeListenerRef.current) {
         wakeListenerRef.current.onend = null;
         try { wakeListenerRef.current.abort(); } catch (_) {}
       }
+      if (commandListenerRef.current) {
+        try { commandListenerRef.current.abort(); } catch (_) {}
+      }
     };
-  }, [wakeWordEnabled]);
+  }, [wakeWordEnabled, isWakeListening]);
 
   const sendMessage = async (text) => {
     const userMessage = { role: 'user', content: text, timestamp: new Date().toISOString() };
@@ -61,19 +185,27 @@ export default function Chat() {
     setIsLoading(true);
 
     const conversationContext = messages.slice(-10).map(m => `${m.role}: ${m.content}`).join('\n');
+    const systemPrompt = `You are ZeowAI, a helpful and friendly AI assistant created by ZWDevelopment. You can mention your creator when directly asked about it, but don't introduce yourself in every response. Be conversational and natural in your responses. You can talk about having a good day or other casual topics when appropriate.`;
     const prompt = conversationContext
-      ? `Previous conversation:\n${conversationContext}\n\nUser: ${text}\n\nRespond helpfully and concisely.`
-      : `User: ${text}\n\nRespond helpfully and concisely.`;
+      ? `${systemPrompt}\n\nPrevious conversation:\n${conversationContext}\n\nUser: ${text}`
+      : `${systemPrompt}\n\nUser: ${text}`;
 
-    const response = await base44.integrations.Core.InvokeLLM({ prompt });
-    const assistantMessage = { role: 'assistant', content: response, timestamp: new Date().toISOString() };
-    setMessages(prev => [...prev, assistantMessage]);
-    setIsLoading(false);
+    try {
+      const response = await base44.integrations.Core.InvokeLLM({ prompt });
+      const assistantMessage = { role: 'assistant', content: response, timestamp: new Date().toISOString() };
+      setMessages(prev => [...prev, assistantMessage]);
 
-    if (settings.readReplies) {
-      stopSpeaking();
-      setIsSpeaking(true);
-      speakText(response, settings.selectedVoice, () => setIsSpeaking(false));
+      if (settings.readReplies) {
+        stopSpeaking();
+        setIsSpeaking(true);
+        speakText(response, settings.selectedVoice, () => setIsSpeaking(false));
+      }
+    } catch (error) {
+      console.error('Error sending message:', error);
+      const errorMessage = { role: 'assistant', content: `Error: ${error.message || 'Failed to get response'}`, timestamp: new Date().toISOString() };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -110,7 +242,7 @@ export default function Chat() {
                 <h1 className="font-space font-bold text-white text-base leading-tight">ZeowAI</h1>
                 <p className="text-white/35 text-xs flex items-center gap-1">
                   <Zap className="w-3 h-3 text-cyan-400" />
-                  Powered by advanced AI
+                  Powered by: ZWDevelopment
                 </p>
               </div>
             </div>
@@ -195,6 +327,9 @@ export default function Chat() {
             disabled={isLoading}
             wakeWordEnabled={wakeWordEnabled}
             onToggleWakeWord={() => setWakeWordEnabled(v => !v)}
+            isWakeListening={isWakeListening}
+            wakeWordDetected={wakeWordDetected}
+            interimText={interimText}
           />
           {wakeWordEnabled && (
             <motion.p
@@ -202,12 +337,12 @@ export default function Chat() {
               animate={{ opacity: 1 }}
               className="text-center text-cyan-400/50 text-xs mt-2"
             >
-              Listening for "Hey Zeow"...
+              Wake me by saying "Hey, ZeowAI!" then what you want to know.
             </motion.p>
           )}
         </div>
         <p className="text-center text-white/20 text-xs pb-3">
-          Created by <span className="text-white/35 font-medium">ZWDevelopment</span>
+          ZeowAI 2025
         </p>
       </div>
     </div>

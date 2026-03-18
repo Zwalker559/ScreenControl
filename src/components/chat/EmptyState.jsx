@@ -3,10 +3,10 @@ import { motion } from 'framer-motion';
 import { MessageSquareText, Mic, Volume2, AudioLines } from 'lucide-react';
 
 const modeInfo = {
-  'text-to-text': { icon: MessageSquareText, title: 'Text to Text', desc: 'Type a message and get a written AI response.' },
-  'speech-to-text': { icon: Mic, title: 'Speech to Text', desc: 'Speak your message and receive a written response.' },
-  'text-to-speech': { icon: Volume2, title: 'Text to Speech', desc: 'Type a message and hear Zeow respond aloud.' },
-  'speech-to-speech': { icon: AudioLines, title: 'Speech to Speech', desc: 'Speak and hear Zeow respond — fully hands-free.' },
+  'text-to-text': { icon: MessageSquareText, title: 'Talk to Zeow', desc: 'Say anything and get a helpful response.' },
+  'speech-to-text': { icon: Mic, title: 'Talk to Zeow', desc: 'Speak freely and Zeow will reply in text.' },
+  'text-to-speech': { icon: Volume2, title: 'Talk to Zeow', desc: 'Type a message and listen as Zeow replies aloud.' },
+  'speech-to-speech': { icon: AudioLines, title: 'Talk to Zeow', desc: 'Start talking and Zeow will answer you in real time.' },
 };
 
 const suggestions = [
@@ -36,7 +36,7 @@ export default function EmptyState({ mode, onSuggestionClick }) {
         <span className="text-white font-space font-bold text-3xl">Z</span>
       </motion.div>
 
-      <h2 className="font-space font-semibold text-xl text-white mb-1">{info.title} Mode</h2>
+      <h2 className="font-space font-semibold text-xl text-white mb-1">{info.title}</h2>
       <p className="text-white/40 text-sm max-w-xs mb-8">{info.desc}</p>
 
       {showSuggestions && (

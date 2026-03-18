@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Volume2, VolumeX, ChevronRight } from 'lucide-react';
+import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { createPageUrl } from '@/utils';
 import { Link } from 'react-router-dom';
 import BackgroundOrbs from '@/components/BackgroundOrbs';
 import VoicePickerModal from '@/components/settings/VoicePickerModal';
 import { useSettings } from '@/components/SettingsContext';
-import { getVoices } from '@/components/speechUtils';
 
 export default function Settings() {
   const { settings, updateSetting } = useSettings();

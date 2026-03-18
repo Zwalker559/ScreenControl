@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mic, Square } from 'lucide-react';
-import { createSpeechRecognition } from '@/lib/speechUtils';
+import { createSpeechRecognition } from '@/components/speechUtils';
 
 export default function VoiceRecorder({ onTranscript, disabled }) {
   const [isRecording, setIsRecording] = useState(false);

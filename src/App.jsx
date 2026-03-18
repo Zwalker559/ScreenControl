@@ -6,7 +6,10 @@ import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import Chat from './pages/Chat';
+import Settings from './pages/Settings';
+import CallMode from './pages/CallMode';
 import { Navigate } from 'react-router-dom';
+import { SettingsProvider } from '@/components/SettingsContext';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -36,6 +39,8 @@ const AuthenticatedApp = () => {
     <Routes>
       <Route path="/" element={<Navigate to="/Chat" replace />} />
       <Route path="/Chat" element={<Chat />} />
+      <Route path="/Settings" element={<Settings />} />
+      <Route path="/CallMode" element={<CallMode />} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );
@@ -48,7 +53,9 @@ function App() {
     <AuthProvider>
       <QueryClientProvider client={queryClientInstance}>
         <Router>
-          <AuthenticatedApp />
+          <SettingsProvider>
+            <AuthenticatedApp />
+          </SettingsProvider>
         </Router>
         <Toaster />
       </QueryClientProvider>

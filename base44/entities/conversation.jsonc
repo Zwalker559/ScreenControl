@@ -1,0 +1,46 @@
+{
+  "name": "Conversation",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Title of the conversation"
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "text-to-text",
+        "speech-to-text",
+        "text-to-speech",
+        "speech-to-speech"
+      ],
+      "description": "Communication mode"
+    },
+    "messages": {
+      "type": "array",
+      "description": "Chat messages",
+      "items": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ]
+          },
+          "content": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "title",
+    "mode"
+  ]
+}
