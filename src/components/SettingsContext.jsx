@@ -5,6 +5,7 @@ const SettingsContext = createContext(null);
 const DEFAULT_SETTINGS = {
   readReplies: false,
   selectedVoice: '',
+  unfiltered: false,
 };
 
 export function SettingsProvider({ children }) {
