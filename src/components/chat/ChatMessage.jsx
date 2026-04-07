@@ -3,8 +3,12 @@ import { motion } from 'framer-motion';
 import { Volume2, VolumeX, User } from 'lucide-react';
 import { speakText, stopSpeaking } from '@/components/speechUtils';
 import ReactMarkdown from 'react-markdown';
+import CodeBlock from './CodeBlock';
+import ImageDisplay from '@/components/ImageDisplay';
+import { useSettings } from '@/components/SettingsContext';
 
 export default function ChatMessage({ message }) {
+  const { settings } = useSettings();
   const [isSpeaking, setIsSpeaking] = useState(false);
   const isUser = message.role === 'user';
 
@@ -17,6 +21,10 @@ export default function ChatMessage({ message }) {
       speakText(message.content, () => setIsSpeaking(false));
     }
   };
+
+  // Check if message content is an image URL
+  const isImageMessage = message.content && message.content.startsWith('data:image/') || message.content.startsWith('https://');
+  const isExplicitImage = message.isExplicit || false;
 
   return (
     <motion.div
@@ -37,26 +45,41 @@ export default function ChatMessage({ message }) {
       </div>
 
       <div className={`max-w-[78%] group flex flex-col ${isUser ? 'items-end' : 'items-start'}`}>
-        <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
-          isUser
-            ? 'text-white rounded-tr-sm'
-            : 'text-white/90 rounded-tl-sm'
-        }`}
-          style={isUser
-            ? { background: 'linear-gradient(135deg, rgba(124,58,237,0.7), rgba(255,45,155,0.5))', border: '1px solid rgba(255,255,255,0.1)' }
-            : { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', backdropFilter: 'blur(10px)' }
-          }
-        >
-          {isUser ? (
-            <p className="whitespace-pre-wrap">{message.content}</p>
-          ) : (
-            <div className="prose prose-sm prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
-              <ReactMarkdown>{message.content}</ReactMarkdown>
-            </div>
-          )}
-        </div>
+        {isImageMessage ? (
+          <ImageDisplay
+            src={message.content}
+            alt={message.alt || 'Generated image'}
+            isExplicit={isExplicitImage}
+            unrevealedText="Click to reveal image"
+          />
+        ) : (
+          <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+            isUser
+              ? 'text-white rounded-tr-sm'
+              : 'text-white/90 rounded-tl-sm'
+          }`}
+            style={isUser
+              ? { background: 'linear-gradient(135deg, rgba(124,58,237,0.7), rgba(255,45,155,0.5))', border: '1px solid rgba(255,255,255,0.1)' }
+              : { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', backdropFilter: 'blur(10px)' }
+            }
+          >
+            {isUser ? (
+              <p className="whitespace-pre-wrap">{message.content}</p>
+            ) : (
+              <div className="prose prose-sm prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+                <ReactMarkdown
+                  components={{
+                    code: CodeBlock,
+                  }}
+                >
+                  {message.content}
+                </ReactMarkdown>
+              </div>
+            )}
+          </div>
+        )}
 
-        {!isUser && (
+        {!isUser && !isImageMessage && (
           <button
             onClick={handleSpeak}
             className="mt-1.5 flex items-center gap-1 text-xs text-white/30 hover:text-cyan-400 transition-colors opacity-0 group-hover:opacity-100"

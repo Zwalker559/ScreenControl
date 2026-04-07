@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, ChevronRight, AlertTriangle } from 'lucide-react';
 import { createPageUrl } from '@/utils';
 import { Link } from 'react-router-dom';
 import BackgroundOrbs from '@/components/BackgroundOrbs';
 import VoicePickerModal from '@/components/settings/VoicePickerModal';
+import UnfilteredWarningModal from '@/components/UnfilteredWarningModal';
 import { useSettings } from '@/components/SettingsContext';
 
 export default function Settings() {
   const { settings, updateSetting } = useSettings();
   const [showVoicePicker, setShowVoicePicker] = useState(false);
+  const [showUnfilteredWarning, setShowUnfilteredWarning] = useState(false);
   const [voiceName, setVoiceName] = useState(settings.selectedVoice || 'Default');
 
   useEffect(() => {
@@ -24,6 +26,21 @@ export default function Settings() {
     updateSetting('selectedVoice', name);
     setVoiceName(name);
     setShowVoicePicker(false);
+  };
+
+  const handleUnfilteredToggle = () => {
+    if (!settings.unfiltered) {
+      // Show warning when enabling
+      setShowUnfilteredWarning(true);
+    } else {
+      // Disable without warning
+      updateSetting('unfiltered', false);
+    }
+  };
+
+  const handleUnfilteredConfirm = () => {
+    updateSetting('unfiltered', true);
+    setShowUnfilteredWarning(false);
   };
 
   return (
@@ -96,6 +113,50 @@ export default function Settings() {
           </div>
         </div>
 
+        {/* Content Filter Section */}
+        <div className="rounded-2xl overflow-hidden mb-6"
+          style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+          <div className="px-5 py-4 border-b border-white/08">
+            <h2 className="font-space font-semibold text-white text-sm">Content Filtering</h2>
+            <p className="text-white/35 text-xs mt-0.5">Control content restrictions and filters</p>
+          </div>
+
+          {/* Unfiltered toggle */}
+          <div className="px-5 py-4 flex items-center justify-between">
+            <div className="flex-1 pr-4">
+              <div className="flex items-center gap-2">
+                <p className="text-white text-sm font-medium">Unfiltered Mode</p>
+                {settings.unfiltered && (
+                  <div className="flex items-center gap-1 px-2 py-1 rounded bg-red-500/20 border border-red-500/40">
+                    <AlertTriangle className="w-3 h-3 text-red-400" />
+                    <span className="text-xs text-red-400 font-medium">Active</span>
+                  </div>
+                )}
+              </div>
+              <p className="text-white/40 text-xs mt-0.5">
+                {settings.unfiltered
+                  ? 'Filters are disabled. All content types are allowed.'
+                  : 'Filters are enabled. Content is restricted to PG ratings.'
+                }
+              </p>
+            </div>
+            <button
+              onClick={handleUnfilteredToggle}
+              className="relative w-12 h-6 rounded-full transition-all flex-shrink-0"
+              style={settings.unfiltered
+                ? { background: 'linear-gradient(135deg, #ff3b30, #ff9500)' }
+                : { background: 'rgba(255,255,255,0.12)' }
+              }
+            >
+              <motion.div
+                className="absolute top-1 w-4 h-4 rounded-full bg-white shadow"
+                animate={{ left: settings.unfiltered ? '26px' : '4px' }}
+                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+              />
+            </button>
+          </div>
+        </div>
+
         {/* Footer */}
         <p className="text-center text-white/20 text-xs mt-8">
           Created by <span className="text-white/35 font-medium">ZWDevelopment</span>
@@ -111,6 +172,12 @@ export default function Settings() {
           />
         )}
       </AnimatePresence>
+
+      <UnfilteredWarningModal
+        isOpen={showUnfilteredWarning}
+        onConfirm={handleUnfilteredConfirm}
+        onCancel={() => setShowUnfilteredWarning(false)}
+      />
     </div>
   );
 }

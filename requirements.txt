@@ -1,0 +1,14 @@
+flask==3.0.0
+Werkzeug==3.0.1
+diffusers==0.24.0
+transformers==4.35.2
+torch==2.1.1
+torchvision==0.16.1
+torchaudio==2.1.1
+Pillow==10.1.0
+python-dotenv==1.0.0
+flask-cors==4.0.0
+numpy==1.24.3
+scipy==1.11.4
+safetensors==0.4.1
+accelerate==0.24.1

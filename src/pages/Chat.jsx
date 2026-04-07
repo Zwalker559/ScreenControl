@@ -11,19 +11,24 @@ import TextInput from '@/components/chat/TextInput';
 import TypingIndicator from '@/components/chat/TypingIndicator';
 import EmptyState from '@/components/chat/EmptyState';
 import SpeakingIndicator from '@/components/chat/SpeakingIndicator';
+import ImageGeneratorInput from '@/components/chat/ImageGeneratorInput';
 import { speakText, stopSpeaking, createWakeWordListener, createSpeechRecognition } from '@/components/speechUtils';
 import { useSettings } from '@/components/SettingsContext';
+import { containsProfanity, filterProfanity, validateImagePrompt } from '@/lib/filterUtils';
+import { generateImage, blobToDataUrl, estimateExplicitContent } from '@/lib/imageGenerator';
 
 export default function Chat() {
   const navigate = useNavigate();
   const { settings, updateSetting } = useSettings();
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [wakeWordEnabled, setWakeWordEnabled] = useState(false);
   const [isWakeListening, setIsWakeListening] = useState(false);
   const [wakeWordDetected, setWakeWordDetected] = useState(false);
   const [interimText, setInterimText] = useState('');
+  const [showImageGenerator, setShowImageGenerator] = useState(false);
   const messagesEndRef = useRef(null);
   const wakeListenerRef = useRef(null);
   const commandListenerRef = useRef(null);
@@ -36,6 +41,7 @@ export default function Chat() {
   useEffect(() => {
     if (wakeWordEnabled) {
       const listener = createWakeWordListener(
+        /** @param {string} eventType */ /** @param {any} data */
         (eventType, data) => {
           if (eventType === 'wake_word_detected') {
             setWakeWordDetected(true);
@@ -58,6 +64,7 @@ export default function Chat() {
             let hasDetectedSpeech = false;
 
             const commandRec = createSpeechRecognition(
+              /** @param {string} text */ /** @param {boolean} isFinal */
               (text, isFinal) => {
                 setInterimText(text);
                 
@@ -86,6 +93,7 @@ export default function Chat() {
                   }, 2000); // Wait 2 seconds of silence before sending
                 }
               },
+              /** @param {string} finalText */
               (finalText) => {
                 // Recognition ended
                 if (silenceTimeout) clearTimeout(silenceTimeout);
@@ -108,6 +116,7 @@ export default function Chat() {
                 }
                 commandListenerRef.current = null;
               },
+              /** @param {string} error */
               (error) => {
                 if (sendTimeout) clearTimeout(sendTimeout);
                 if (silenceTimeout) clearTimeout(silenceTimeout);
@@ -148,6 +157,7 @@ export default function Chat() {
             }
           }
         },
+        /** @param {string} err */
         (err) => console.warn('Wake word error:', err)
       );
       if (listener) {
@@ -179,19 +189,31 @@ export default function Chat() {
     };
   }, [wakeWordEnabled, isWakeListening]);
 
-  const sendMessage = async (text) => {
-    const userMessage = { role: 'user', content: text, timestamp: new Date().toISOString() };
+  const sendMessage = async (/** @type {string} */ text) => {
+    // Apply content filter to user message if unfiltered is OFF
+    let userMessage = { role: 'user', content: text, timestamp: new Date().toISOString() };
+    
+    if (!settings.unfiltered && containsProfanity(text)) {
+      userMessage = { ...userMessage, content: filterProfanity(text) };
+    }
+    
     setMessages(prev => [...prev, userMessage]);
     setIsLoading(true);
 
     const conversationContext = messages.slice(-10).map(m => `${m.role}: ${m.content}`).join('\n');
     const systemPrompt = `You are ZeowAI, a helpful and friendly AI assistant created by ZWDevelopment. You can mention your creator when directly asked about it, but don't introduce yourself in every response. Be conversational and natural in your responses. You can talk about having a good day or other casual topics when appropriate.`;
     const prompt = conversationContext
-      ? `${systemPrompt}\n\nPrevious conversation:\n${conversationContext}\n\nUser: ${text}`
-      : `${systemPrompt}\n\nUser: ${text}`;
+      ? `${systemPrompt}\n\nPrevious conversation:\n${conversationContext}\n\nUser: ${userMessage.content}`
+      : `${systemPrompt}\n\nUser: ${userMessage.content}`;
 
     try {
-      const response = await base44.integrations.Core.InvokeLLM({ prompt });
+      let response = await base44.integrations.Core.InvokeLLM({ prompt });
+      
+      // Apply content filter to AI response if unfiltered is OFF
+      if (!settings.unfiltered && containsProfanity(response)) {
+        response = filterProfanity(response);
+      }
+      
       const assistantMessage = { role: 'assistant', content: response, timestamp: new Date().toISOString() };
       setMessages(prev => [...prev, assistantMessage]);
 
@@ -213,6 +235,65 @@ export default function Chat() {
     stopSpeaking();
     setIsSpeaking(false);
     setMessages([]);
+  };
+
+  const handleGenerateImage = async (prompt) => {
+    // Validate prompt based on filter settings
+    if (!settings.unfiltered) {
+      const validation = validateImagePrompt(prompt);
+      if (!validation.isAppropriate) {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: validation.reason,
+          timestamp: new Date().toISOString()
+        }]);
+        return;
+      }
+    }
+
+    // Add user request to messages
+    setMessages(prev => [...prev, {
+      role: 'user',
+      content: `Generate image: ${prompt}`,
+      timestamp: new Date().toISOString()
+    }]);
+
+    setIsGeneratingImage(true);
+
+    try {
+      // Generate image using local API
+      const imageBlob = await generateImage(prompt);
+      const dataUrl = await blobToDataUrl(imageBlob);
+      
+      // Estimate if content is explicit
+      const isExplicit = estimateExplicitContent(prompt);
+
+      // Add image to messages
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: dataUrl,
+        timestamp: new Date().toISOString(),
+        isExplicit: isExplicit,
+        alt: prompt
+      }]);
+    } catch (error) {
+      console.error('Error generating image:', error);
+      
+      // Check if API is down
+      let errorMsg = error.message;
+      if (errorMsg.includes('Failed to fetch') || errorMsg.includes('localhost')) {
+        errorMsg = 'Local image generation API is not running. Start the server with: python server.py';
+      }
+      
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: `Failed to generate image: ${errorMsg}`,
+        timestamp: new Date().toISOString()
+      }]);
+    } finally {
+      setIsGeneratingImage(false);
+      setShowImageGenerator(false);
+    }
   };
 
   const toggleReadReplies = () => {
@@ -322,23 +403,52 @@ export default function Chat() {
       {/* Input */}
       <div className="relative z-10 flex-shrink-0 glass">
         <div className="max-w-3xl mx-auto px-4 py-4">
-          <TextInput
-            onSend={sendMessage}
-            disabled={isLoading}
-            wakeWordEnabled={wakeWordEnabled}
-            onToggleWakeWord={() => setWakeWordEnabled(v => !v)}
-            isWakeListening={isWakeListening}
-            wakeWordDetected={wakeWordDetected}
-            interimText={interimText}
-          />
-          {wakeWordEnabled && (
-            <motion.p
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="text-center text-cyan-400/50 text-xs mt-2"
-            >
-              Wake me by saying "Hey, ZeowAI!" then what you want to know.
-            </motion.p>
+          {showImageGenerator ? (
+            <div className="space-y-3">
+              <ImageGeneratorInput
+                onGenerate={handleGenerateImage}
+                isLoading={isGeneratingImage}
+                disabled={isLoading}
+              />
+              <button
+                onClick={() => setShowImageGenerator(false)}
+                className="w-full px-3 py-2 rounded-lg text-sm text-white/60 hover:text-white transition-colors"
+                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
+              >
+                Back to Chat
+              </button>
+            </div>
+          ) : (
+            <>
+              <TextInput
+                onSend={sendMessage}
+                disabled={isLoading || isGeneratingImage}
+                wakeWordEnabled={wakeWordEnabled}
+                onToggleWakeWord={() => setWakeWordEnabled(v => !v)}
+                isWakeListening={isWakeListening}
+                wakeWordDetected={wakeWordDetected}
+                interimText={interimText}
+              />
+              <div className="flex gap-2 mt-2">
+                <button
+                  onClick={() => setShowImageGenerator(true)}
+                  className="flex-1 px-3 py-2 rounded-lg text-xs text-white/60 hover:text-white transition-colors font-medium"
+                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
+                  disabled={isLoading || isGeneratingImage}
+                >
+                  🎨 Generate Image
+                </button>
+              </div>
+              {wakeWordEnabled && (
+                <motion.p
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="text-center text-cyan-400/50 text-xs mt-2"
+                >
+                  Wake me by saying "Hey, ZeowAI!" then what you want to know.
+                </motion.p>
+              )}
+            </>
           )}
         </div>
         <p className="text-center text-white/20 text-xs pb-3">
