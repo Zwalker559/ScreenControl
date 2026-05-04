@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { groqClient } from '@/api/groqClient';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Trash2, Zap, Settings, Phone, Volume2, VolumeX } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -15,7 +15,7 @@ import ImageGeneratorInput from '@/components/chat/ImageGeneratorInput';
 import { speakText, stopSpeaking, createWakeWordListener, createSpeechRecognition } from '@/components/speechUtils';
 import { useSettings } from '@/components/SettingsContext';
 import { containsProfanity, filterProfanity, validateImagePrompt } from '@/lib/filterUtils';
-import { generateImage, blobToDataUrl, estimateExplicitContent } from '@/lib/imageGenerator';
+import { generateImage, blobToDataUrl, estimateExplicitContent, detectImageKeywords } from '@/lib/imageGenerator';
 
 export default function Chat() {
   const navigate = useNavigate();
@@ -190,6 +190,9 @@ export default function Chat() {
   }, [wakeWordEnabled, isWakeListening]);
 
   const sendMessage = async (/** @type {string} */ text) => {
+    // Check for image generation keywords
+    const { shouldGenerate, extractedPrompt } = detectImageKeywords(text);
+
     // Apply content filter to user message if unfiltered is OFF
     let userMessage = { role: 'user', content: text, timestamp: new Date().toISOString() };
     
@@ -200,14 +203,44 @@ export default function Chat() {
     setMessages(prev => [...prev, userMessage]);
     setIsLoading(true);
 
-    const conversationContext = messages.slice(-10).map(m => `${m.role}: ${m.content}`).join('\n');
-    const systemPrompt = `You are ZeowAI, a helpful and friendly AI assistant created by ZWDevelopment. You can mention your creator when directly asked about it, but don't introduce yourself in every response. Be conversational and natural in your responses. You can talk about having a good day or other casual topics when appropriate.`;
-    const prompt = conversationContext
-      ? `${systemPrompt}\n\nPrevious conversation:\n${conversationContext}\n\nUser: ${userMessage.content}`
-      : `${systemPrompt}\n\nUser: ${userMessage.content}`;
-
     try {
-      let response = await base44.integrations.Core.InvokeLLM({ prompt });
+      // If image generation keywords detected, trigger image generation in parallel
+      if (shouldGenerate && extractedPrompt) {
+        // Validate prompt based on filter settings
+        const validation = validateImagePrompt(extractedPrompt, settings.unfiltered);
+        
+        if (validation.isAppropriate) {
+          // Start image generation in parallel (don't await)
+          setIsGeneratingImage(true);
+          generateImageAsync(extractedPrompt);
+        } else {
+          // Show validation error
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: validation.reason,
+            timestamp: new Date().toISOString()
+          }]);
+        }
+        
+        // For image requests, still provide a chat response
+        // (unless they ONLY asked for an image with no other context)
+        const hasOtherContent = text.toLowerCase().replace(/generate|create|make|draw|image|picture|photo|of|a|an|the|me|show/gi, '').trim().length > 10;
+        
+        if (!hasOtherContent) {
+          // Just an image request, acknowledge it
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      // Get chat response for text queries
+      const conversationContext = messages.slice(-10).map(m => `${m.role}: ${m.content}`).join('\n');
+      const systemPrompt = `You are ZeowAI, a helpful and friendly AI assistant created by ZWDevelopment. You can mention your creator when directly asked about it, but don't introduce yourself in every response. Be conversational and natural in your responses. You can talk about having a good day or other casual topics when appropriate.`;
+      const prompt = conversationContext
+        ? `${systemPrompt}\n\nPrevious conversation:\n${conversationContext}\n\nUser: ${userMessage.content}`
+        : `${systemPrompt}\n\nUser: ${userMessage.content}`;
+
+      let response = await groqClient.completionCreate({ prompt });
       
       // Apply content filter to AI response if unfiltered is OFF
       if (!settings.unfiltered && containsProfanity(response)) {
@@ -231,6 +264,42 @@ export default function Chat() {
     }
   };
 
+  const generateImageAsync = async (/** @type {string} */ prompt) => {
+    try {
+      // Generate image using local API
+      const imageBlob = await generateImage(prompt);
+      const dataUrl = await blobToDataUrl(imageBlob);
+      
+      // Estimate if content is explicit
+      const isExplicit = estimateExplicitContent(prompt);
+
+      // Add image to messages
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: dataUrl,
+        timestamp: new Date().toISOString(),
+        isExplicit: isExplicit,
+        alt: prompt
+      }]);
+    } catch (error) {
+      console.error('Error generating image:', error);
+      
+      // Check if API is down
+      let errorMsg = error.message;
+      if (errorMsg.includes('Failed to fetch') || errorMsg.includes('localhost')) {
+        errorMsg = 'Local image generation API is not running. Start the server with: python server.py';
+      }
+      
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: `Failed to generate image: ${errorMsg}`,
+        timestamp: new Date().toISOString()
+      }]);
+    } finally {
+      setIsGeneratingImage(false);
+    }
+  };
+
   const handleClear = () => {
     stopSpeaking();
     setIsSpeaking(false);
@@ -239,22 +308,20 @@ export default function Chat() {
 
   const handleGenerateImage = async (prompt) => {
     // Validate prompt based on filter settings
-    if (!settings.unfiltered) {
-      const validation = validateImagePrompt(prompt);
-      if (!validation.isAppropriate) {
-        setMessages(prev => [...prev, {
-          role: 'assistant',
-          content: validation.reason,
-          timestamp: new Date().toISOString()
-        }]);
-        return;
-      }
+    const validation = validateImagePrompt(prompt, settings.unfiltered);
+    if (!validation.isAppropriate) {
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: validation.reason,
+        timestamp: new Date().toISOString()
+      }]);
+      return;
     }
 
     // Add user request to messages
     setMessages(prev => [...prev, {
       role: 'user',
-      content: `Generate image: ${prompt}`,
+      content: `Manual image request: ${prompt}`,
       timestamp: new Date().toISOString()
     }]);
 
@@ -429,16 +496,6 @@ export default function Chat() {
                 wakeWordDetected={wakeWordDetected}
                 interimText={interimText}
               />
-              <div className="flex gap-2 mt-2">
-                <button
-                  onClick={() => setShowImageGenerator(true)}
-                  className="flex-1 px-3 py-2 rounded-lg text-xs text-white/60 hover:text-white transition-colors font-medium"
-                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
-                  disabled={isLoading || isGeneratingImage}
-                >
-                  🎨 Generate Image
-                </button>
-              </div>
               {wakeWordEnabled && (
                 <motion.p
                   initial={{ opacity: 0 }}
@@ -448,11 +505,14 @@ export default function Chat() {
                   Wake me by saying "Hey, ZeowAI!" then what you want to know.
                 </motion.p>
               )}
+              <p className="text-center text-white/30 text-xs mt-3 px-2">
+                💡 <span className="text-white/40">Try: "generate an image of a sunset" or "create a picture of a cat"</span>
+              </p>
             </>
           )}
         </div>
         <p className="text-center text-white/20 text-xs pb-3">
-          ZeowAI 2025
+          ZeowAI 2025 • Images auto-generate when keywords detected
         </p>
       </div>
     </div>

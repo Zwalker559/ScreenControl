@@ -70,23 +70,31 @@ export function filterProfanity(text) {
 /**
  * Check if image generation prompt is appropriate (filters explicit requests)
  * @param {string} prompt
+ * @param {boolean} allowExplicit - If true, allows explicit content (unfiltered mode)
  * @returns {object} { isAppropriate: boolean, reason: string }
  */
-export function validateImagePrompt(prompt) {
+export function validateImagePrompt(prompt, allowExplicit = false) {
   if (!prompt) return { isAppropriate: true, reason: '' };
+  
+  // If unfiltered mode is enabled, allow all prompts
+  if (allowExplicit) {
+    return { isAppropriate: true, reason: '' };
+  }
   
   const lowerPrompt = prompt.toLowerCase();
   
   const explicitIndicators = [
     'nude', 'naked', 'porn', 'sex', 'xxx', 'explicit', 'nsfw',
-    'adult only', 'not safe for work', 'mature content',
+    'adult only', 'not safe for work', 'mature content', 'undress',
+    'topless', 'bottomless', 'private parts', 'adult', 'erotic',
+    'sexual', 'xxx rated', 'x rated'
   ];
   
   for (const indicator of explicitIndicators) {
     if (lowerPrompt.includes(indicator)) {
       return {
         isAppropriate: false,
-        reason: `Image generation cannot create explicit content containing "${indicator}"`
+        reason: `Cannot generate explicit content (enable unfiltered mode in Settings to bypass filters)`
       };
     }
   }

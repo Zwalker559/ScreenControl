@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mic, Volume2, PhoneOff, RotateCcw, MessageCircle, MicOff, X } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { groqClient } from '@/api/groqClient';
 import { createPageUrl } from '@/utils';
 import { useNavigate } from 'react-router-dom';
 import BackgroundOrbs from '@/components/BackgroundOrbs';
@@ -69,7 +69,7 @@ export default function CallMode() {
           : `${systemPrompt}\n\nUser: ${finalText}`;
 
         try {
-          const response = await base44.integrations.Core.InvokeLLM({ prompt });
+          const response = await groqClient.completionCreate({ prompt });
 
           messagesRef.current = [
             ...messagesRef.current,

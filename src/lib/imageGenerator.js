@@ -119,6 +119,62 @@ export function estimateExplicitContent(prompt) {
 }
 
 /**
+ * Detect if text contains image generation keywords
+ * @param {string} text
+ * @returns {object} { shouldGenerate: boolean, extractedPrompt: string }
+ */
+export function detectImageKeywords(text) {
+  if (!text) return { shouldGenerate: false, extractedPrompt: '' };
+
+  const lowerText = text.toLowerCase();
+  
+  // Image generation trigger keywords that appear at the start or as clear intent markers
+  const triggerPatterns = [
+    /^(?:generate|create|make|draw|paint|design|sketch|illustrate)\s+(?:an?\s+)?(?:image|picture|photo|artwork|art)\s+(?:of\s+)?(.+)$/i,
+    /^(?:show|display|generate|create)\s+(?:me\s+)?(?:an?\s+)?(?:image|picture|photo|artwork|art)\s+(?:of\s+)?(.+)$/i,
+    /^(?:i\s+(?:want|need|would like|wish)\s+a(?:n)?\s+)?(?:image|picture|photo|artwork|art)\s+(?:of|showing|with|depicting)\s+(.+)$/i,
+    /(?:^|\s)(?:generate|create|make|draw|show me)\s+(?:an?\s+)?(?:image|picture|photo)\s+of\s+(.+)$/i,
+    /^(?:generate|create|make|draw|paint|design|imagine)\s+(.+)$/i, // Looser match: just "generate [description]"
+  ];
+
+  for (const pattern of triggerPatterns) {
+    const match = text.match(pattern);
+    if (match && match[1]) {
+      return {
+        shouldGenerate: true,
+        extractedPrompt: match[1].trim()
+      };
+    }
+  }
+
+  // Check for image-related queries in the message
+  const imageKeywords = [
+    'generate image', 'create image', 'make image', 'draw', 'paint', 'design',
+    'show me image', 'picture of', 'photo of', 'artwork of', 'illustrate',
+    'sketch of', 'visual of', 'render', 'imagine'
+  ];
+
+  // Only trigger if the keyword is in the first half of the message (indicates intent)
+  const firstHalf = text.substring(0, text.length / 2).toLowerCase();
+  
+  for (const keyword of imageKeywords) {
+    if (firstHalf.includes(keyword)) {
+      // Extract everything after the keyword as the prompt
+      const keywordIndex = lowerText.indexOf(keyword);
+      const afterKeyword = text.substring(keywordIndex + keyword.length).trim();
+      if (afterKeyword) {
+        return {
+          shouldGenerate: true,
+          extractedPrompt: afterKeyword
+        };
+      }
+    }
+  }
+
+  return { shouldGenerate: false, extractedPrompt: '' };
+}
+
+/**
  * Get download filename for generated image
  * @param {number} timestamp
  * @returns {string}
